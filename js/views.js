@@ -148,10 +148,10 @@ export function library() {
     const pls = store.state.playlists;
     el.innerHTML = `<div class="page"><h1>ライブラリ</h1>
       <div class="grid">
-        <button class="card" data-act="new"><span class="cover newc"><span class="plus">＋</span></span><span class="cn">新規作成</span><span class="cs">&nbsp;</span></button>
         ${pls.map((p) => `<div class="card" data-id="${p.id}">
           <button class="card-open" data-act="open">${cover(p.videos)}<span class="cn">${esc(p.name)}</span><span class="cs">${p.videos.length}本の動画</span></button>
           <button class="card-more" data-act="more" aria-label="メニュー">${icon('more')}</button></div>`).join('')}
+        <button class="card" data-act="new"><span class="cover newc"><span class="plus">＋</span></span><span class="cn">新規作成</span><span class="cs">&nbsp;</span></button>
       </div>
       ${!store.state.ready ? '<p class="muted center">読み込み中…</p>' : ''}
       ${store.state.error ? `<p class="notice err">${store.state.error === 'permission-denied' ? 'データを読み込めません（権限エラー）。FirestoreのセキュリティルールをREADMEの通りに設定してください。' : '同期エラー: ' + esc(store.state.error)}</p>` : ''}
