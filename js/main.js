@@ -84,7 +84,8 @@ window.addEventListener('offline', renderSync);
 /* ---------- ルーティング ---------- */
 let current = null;
 function route() {
-  if (!store.state.user) return;
+  if (!store.state.user || store.state.access === 'denied') return;
+  try { current?.destroy?.(); } catch { /* */ }
   // 画面ごとにイベントリスナーを初期化するため、#viewを作り直す
   const old = $('#view');
   const fresh = old.cloneNode(false);
@@ -153,8 +154,10 @@ async function boot() {
   }
   store.subscribe(onStoreChange);
   store.onAuth((user) => {
-    document.body.dataset.anon = user ? '' : '1';
-    if (!user) { player.state.cur = null; views.login(); renderControls(); }
+    const denied = user && store.state.access === 'denied';
+    document.body.dataset.anon = user && !denied ? '' : '1';
+    if (!user) { player.state.cur = null; current = null; views.login(); renderControls(); }
+    else if (denied) { current = null; views.denied(user); }
     else route();
     renderSync();
   });

@@ -499,6 +499,10 @@ export function settings(fbSource) {
     <section class="panel"><h2>アカウント</h2>
       <p>${u ? `${esc(u.name || '')} <span class="muted">${esc(u.email || '')}</span>` : ''}</p>
       <button class="btn" id="signout">ログアウト</button></section>
+    ${store.state.isAdmin ? `<section class="panel"><h2>メンバー管理（管理者）</h2>
+      <p class="muted small">ここに登録したGoogleメールアドレスの人だけが、このアプリを使えます。登録するとすぐ反映されます（ルールの書き換えは不要です）。</p>
+      <div id="allowed" class="members"><p class="muted small">読み込み中…</p></div>
+      <form id="allowForm" class="inline"><input class="inp" type="email" inputmode="email" autocapitalize="off" autocomplete="off" placeholder="example@gmail.com" required><button class="btn primary">追加</button></form></section>` : ''}
     <section class="panel"><h2>YouTube APIキー</h2>
       <p class="muted small">動画の検索に使います。キーは<b>この端末のブラウザにだけ</b>保存され、サーバーやGitHubには送られません。端末ごとに入力が必要です。取得方法はREADMEを見てください。</p>
       <input id="apikey" class="inp" type="password" autocomplete="off" spellcheck="false" placeholder="AIza…" value="${esc(getApiKey())}">
@@ -516,6 +520,22 @@ export function settings(fbSource) {
   </div>`;
   const msg = $('#keyMsg', el);
   $('#signout', el).onclick = () => store.signOut();
+  let stopAllowed = null;
+  if (store.state.isAdmin) {
+    const box = $('#allowed', el);
+    stopAllowed = store.watchAllowed((list) => {
+      box.innerHTML = list.length ? list.map((e) => `<div class="member"><div class="m-email">${esc(e)}</div><button class="btn danger" data-off="${esc(e)}">削除</button></div>`).join('') : '<p class="muted small">まだ誰も登録していません（あなた自身は管理者なので登録不要です）。</p>';
+    }, () => { box.innerHTML = '<p class="notice err">読み込めません。ルールが最新か確認してください。</p>'; });
+    box.onclick = async (e) => {
+      const b = e.target.closest('[data-off]');
+      if (b && await confirmDialog(`${b.dataset.off} の利用許可を削除しますか？（この人のデータは消えませんが、使えなくなります）`, '削除')) store.disallowEmail(b.dataset.off);
+    };
+    $('#allowForm', el).onsubmit = async (e) => {
+      e.preventDefault();
+      const inp = e.target.querySelector('input');
+      try { await store.allowEmail(inp.value); toast('登録しました'); inp.value = ''; } catch (err) { toast(err.message, { error: true }); }
+    };
+  }
   $('#keySave', el).onclick = () => { setApiKey($('#apikey', el).value.trim()); msg.textContent = '保存しました。'; };
   $('#keyClear', el).onclick = () => { setApiKey(''); $('#apikey', el).value = ''; msg.textContent = '削除しました。'; };
   $('#keyTest', el).onclick = async () => {
@@ -544,7 +564,7 @@ export function settings(fbSource) {
   };
   $('#fbReset', el)?.addEventListener('click', () => { try { localStorage.removeItem('okitube.fbconfig'); } catch { /* */ } location.reload(); });
   el.onclick = null;
-  return {};
+  return { destroy: () => stopAllowed?.() };
 }
 
 /* ---------- ログイン / 初期設定 / エラー ---------- */
@@ -561,6 +581,18 @@ export function login() {
       m.textContent = e.code === 'auth/unauthorized-domain' ? 'このサイトのドメインがFirebaseの「承認済みドメイン」に登録されていません（READMEを確認）。' : `ログインに失敗しました（${e.code || e.message}）`;
     }
   };
+}
+
+// 許可されていないアカウントでログインしたとき
+export function denied(user) {
+  const el = root();
+  el.onclick = null;
+  el.innerHTML = `<div class="page narrow center hero"><div class="logo-big">🔒</div><h1>利用が許可されていません</h1>
+    <p class="muted">このアプリは、許可されたメンバーだけが使えます。<br>管理者に、下のメールアドレスの登録を依頼してください。</p>
+    <p><b>${esc(user.email || '')}</b></p>
+    <details class="small muted"><summary>管理者の方へ</summary><p>ユーザーID: <code>${esc(user.uid)}</code><br>（最初の管理者になるには、READMEの手順で <code>admins</code> に登録します）</p></details>
+    <button class="btn" id="out">別のアカウントでログインする</button></div>`;
+  $('#out', el).onclick = () => store.signOut();
 }
 
 export function setup(onSaved) {
