@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0d0d10">
+<title>oki-tube</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon.svg">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body data-mode="normal" data-anon="1">
+<div id="app">
+  <header id="topbar">
+    <a class="logo" href="#/">▶ oki-tube</a>
+    <nav id="tabs" aria-label="メニュー">
+      <a href="#/" data-tab="library">ライブラリ</a>
+      <a href="#/add" data-tab="add">検索・追加</a>
+      <a href="#/ch" data-tab="ch">チャンネル</a>
+      <a href="#/settings" data-tab="settings">設定</a>
+    </nav>
+    <span class="spacer"></span>
+    <span id="sync" class="sync" role="status"></span>
+    <div class="seg" id="modeSeg" role="group" aria-label="表示モード">
+      <button data-mode="normal" title="通常モード"><span>🖥</span><em>通常</em></button>
+      <button data-mode="watch" title="視聴モード"><span>🎬</span><em>視聴</em></button>
+      <button data-mode="bgm" title="BGMモード"><span>🎧</span><em>BGM</em></button>
+      <button data-mode="drive" title="運転モード"><span>🚗</span><em>運転</em></button>
+    </div>
+  </header>
+
+  <div id="body">
+    <main id="view"></main>
+    <section id="stage" aria-label="プレーヤー">
+      <div id="playerBox">
+        <div id="yt"></div>
+        <div id="idle">再生する動画を選んでください</div>
+      </div>
+    </section>
+  </div>
+
+  <footer id="dock">
+    <div class="dk-now">
+      <img id="dkThumb" alt="" hidden>
+      <div class="dk-text"><div id="dkTitle" class="dk-title">停止中</div><div id="dkChannel" class="dk-channel"></div></div>
+    </div>
+    <div class="dk-ctl">
+      <button class="ctl" data-ctl="prev" aria-label="前へ"></button>
+      <button class="ctl main" data-ctl="toggle" aria-label="再生/一時停止"></button>
+      <button class="ctl" data-ctl="next" aria-label="次へ"></button>
+    </div>
+    <div class="dk-seek">
+      <button class="ctl sm" data-ctl="shuffle" aria-label="シャッフル"></button>
+      <span id="tCur">0:00</span>
+      <input id="seek" type="range" min="0" max="0" step="1" value="0" aria-label="シーク">
+      <span id="tDur">0:00</span>
+      <button class="ctl sm" data-ctl="repeat" aria-label="リピート"></button>
+    </div>
+  </footer>
+
+  <section id="drive" aria-label="運転モード">
+    <div class="dr-title" id="drTitle">停止中</div>
+    <div class="dr-main">
+      <button class="big" data-ctl="prev" aria-label="前へ"></button>
+      <button class="big main" data-ctl="toggle" aria-label="再生/一時停止"></button>
+      <button class="big" data-ctl="next" aria-label="次へ"></button>
+    </div>
+    <div class="dr-sub">
+      <button class="big small" data-ctl="shuffle" aria-label="シャッフル"></button>
+      <button class="big small" data-ctl="repeat" aria-label="リピート"></button>
+      <button class="big small exit" data-mode="normal">✕ 終了</button>
+    </div>
+    <p class="dr-note">運転中は画面を注視せず、安全を最優先にしてください。</p>
+  </section>
+</div>
+<div id="toasts" aria-live="polite"></div>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
