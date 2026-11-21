@@ -22,6 +22,26 @@ export function markPlaying() {
 const cover = (videos, cls = '') =>
   `<span class="cover ${cls}">${videos.length ? `<img src="${thumbUrl(videos[0].videoId)}" alt="" loading="lazy">` : '<span class="ph">♪</span>'}</span>`;
 
+// プレイリストのカバー: 1本=大きく / 2本=左右 / 3本=左1+右2 / 4本以上=2x2（4本以上ならランダムに4本）
+const picks = new Map(); // プレイリストID -> {sig, list}（読み込み中は同じ顔ぶれを保つ）
+function mosaic(pl, cls = '') {
+  const vids = pl.videos;
+  if (!vids.length) return cover([], cls);
+  let list = vids.slice(0, 3);
+  if (vids.length >= 4) {
+    const sig = vids.map((v) => v.uid).join();
+    let c = picks.get(pl.id);
+    if (!c || c.sig !== sig) {
+      const a = [...vids];
+      for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
+      c = { sig, list: a.slice(0, 4) }; picks.set(pl.id, c);
+    }
+    list = c.list;
+  }
+  const n = Math.min(list.length, 4);
+  return `<span class="cover mosaic m${n} ${cls}">${list.map((v) => `<img src="${thumbUrl(v.videoId)}" alt="" loading="lazy">`).join('')}</span>`;
+}
+
 function rowHtml(v, o = {}) {
   return `<li class="row" data-uid="${esc(v.uid)}">
     ${o.edit ? `<span class="handle" title="ドラッグで並べ替え">${icon('drag')}</span>` : ''}
@@ -142,14 +162,19 @@ function enableDrag(ul, commit) {
 }
 
 /* ---------- ライブラリ（プレイリスト一覧） ---------- */
+let libView = (() => { try { return localStorage.getItem('okitube.libView') === 'list' ? 'list' : 'grid'; } catch { return 'grid'; } })();
 export function library() {
   const el = root();
   function draw() {
     const pls = store.state.playlists;
-    el.innerHTML = `<div class="page"><h1>ライブラリ</h1>
-      <div class="grid">
+    el.innerHTML = `<div class="page"><div class="lib-head"><h1>ライブラリ</h1>
+        <div class="seg view-toggle" role="group" aria-label="表示形式">
+          <button data-act="view-grid" aria-pressed="${libView === 'grid'}" title="タイル表示">▦</button>
+          <button data-act="view-list" aria-pressed="${libView === 'list'}" title="リスト表示">☰</button>
+        </div></div>
+      <div class="grid ${libView === 'list' ? 'as-list' : ''}">
         ${pls.map((p) => `<div class="card" data-id="${p.id}">
-          <button class="card-open" data-act="open">${cover(p.videos)}<span class="cn">${esc(p.name)}</span><span class="cs">${p.videos.length}本の動画</span></button>
+          <button class="card-open" data-act="open">${mosaic(p)}<span class="cn">${esc(p.name)}</span><span class="cs">${p.videos.length}本の動画</span></button>
           <button class="card-more" data-act="more" aria-label="メニュー">${icon('more')}</button></div>`).join('')}
         <button class="card" data-act="new"><span class="cover newc"><span class="plus">＋</span></span><span class="cn">新規作成</span><span class="cs">&nbsp;</span></button>
       </div>
@@ -163,7 +188,11 @@ export function library() {
     if (!b) return;
     const card = b.closest('[data-id]');
     const pl = card && store.state.playlists.find((p) => p.id === card.dataset.id);
-    if (b.dataset.act === 'new') {
+    if (b.dataset.act === 'view-grid' || b.dataset.act === 'view-list') {
+      libView = b.dataset.act === 'view-list' ? 'list' : 'grid';
+      try { localStorage.setItem('okitube.libView', libView); } catch { /* */ }
+      draw();
+    } else if (b.dataset.act === 'new') {
       const name = await promptText({ title: '新規プレイリスト', placeholder: 'プレイリスト名', ok: '作成' });
       if (name) location.hash = `#/pl/${store.createPlaylist(name)}`;
     } else if (b.dataset.act === 'open' && pl) location.hash = `#/pl/${pl.id}`;
@@ -185,7 +214,7 @@ export function playlist(id) {
       return;
     }
     el.innerHTML = `<div class="page"><a class="back" href="#/">‹ ライブラリ</a>
-      <div class="pl-head">${cover(pl.videos, 'big')}<div class="pl-info"><h1>${esc(pl.name)}</h1><p class="muted">${pl.videos.length}本の動画</p></div></div>
+      <div class="pl-head">${mosaic(pl, 'big')}<div class="pl-info"><h1>${esc(pl.name)}</h1><p class="muted">${pl.videos.length}本の動画</p></div></div>
       <div class="actions">
         <button class="btn primary" data-act="playall">▶ 再生</button>
         <button class="btn" data-act="shuffle">🔀 シャッフル</button>

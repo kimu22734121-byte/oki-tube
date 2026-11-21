@@ -216,3 +216,24 @@ dialog.dlg::backdrop { background: #000a; }
   [data-mode=drive] #drive { padding: 12px 12px 12px calc(min(356px, 40vw) + 24px); }
   .dr-sub { height: 60px; }
 }
+
+/* ---- ライブラリのカバー（モザイク）と表示切替 ---- */
+.cover.mosaic { display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; gap: 2px; background: #1b1b22; }
+.cover.mosaic img { width: 100%; height: 100%; min-width: 0; min-height: 0; object-fit: cover; }
+.cover.mosaic.m1 { grid-template-columns: 1fr; grid-template-rows: 1fr; }
+.cover.mosaic.m2 img { grid-row: 1 / 3; }
+.cover.mosaic.m3 img:first-child { grid-row: 1 / 3; }
+/* 文字は画像の上に重ねず、常にカバーの下に表示。「…」ボタンは濃い背景で読みやすく */
+.card-more { background: #000c; box-shadow: 0 0 0 1px #fff3; }
+.lib-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
+.lib-head h1 { margin: 8px 0; }
+.view-toggle button { padding: 5px 14px; font-size: 16px; }
+.grid.as-list { grid-template-columns: 1fr; gap: 6px; }
+.as-list .card { display: flex; align-items: center; gap: 8px; border-radius: 10px; padding: 4px; }
+.as-list .card:hover { background: var(--panel); }
+.as-list .card-open, .as-list button.card { display: grid; grid-template-columns: 64px minmax(0, 1fr); grid-template-rows: auto auto; column-gap: 12px; align-items: center; flex: 1; min-width: 0; }
+.as-list .cover { grid-row: 1 / 3; width: 64px; border-radius: 8px; box-shadow: none; }
+.as-list .cover.newc .plus { font-size: 28px; }
+.as-list .cn { margin: 0; align-self: end; }
+.as-list .cs { align-self: start; }
+.as-list .card-more { position: static; flex: none; background: none; box-shadow: none; color: var(--muted); }
