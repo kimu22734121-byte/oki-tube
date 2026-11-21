@@ -2,17 +2,46 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // 自分のデータ（users/自分のUID/ 以下）だけ読み書きできる
-    match /users/{userId}/playlists/{playlistId} {
-      allow read, delete: if request.auth != null && request.auth.uid == userId;
+    function signedIn() { return request.auth != null; }
+    function verified() { return signedIn() && request.auth.token.email_verified == true; }
+    function myEmail() { return request.auth.token.email.lower(); }
 
-      allow create, update: if request.auth != null
-        && request.auth.uid == userId
-        && request.resource.data.name is string
-        && request.resource.data.name.size() > 0
-        && request.resource.data.name.size() <= 100
-        && request.resource.data.videos is list
-        && request.resource.data.videos.size() <= 2000;
+    function validPlaylist(d) {
+      return d.name is string && d.name.size() > 0 && d.name.size() <= 100
+        && d.videos is list && d.videos.size() <= 2000
+        && d.get('viewerEmails', []) is list && d.get('viewerEmails', []).size() <= 20
+        && d.get('editorEmails', []) is list && d.get('editorEmails', []).size() <= 20;
+    }
+
+    // プレイリスト: 持ち主は全操作。共有された相手は「見るだけ」または「動画の編集」まで。
+    match /users/{userId}/playlists/{playlistId} {
+      allow read: if signedIn() && (
+        request.auth.uid == userId
+        || (verified() && (myEmail() in resource.data.get('viewerEmails', [])
+                           || myEmail() in resource.data.get('editorEmails', []))));
+
+      allow create: if signedIn() && request.auth.uid == userId && validPlaylist(request.resource.data);
+
+      allow update: if signedIn() && (
+        (request.auth.uid == userId && validPlaylist(request.resource.data))
+        || (verified() && myEmail() in resource.data.get('editorEmails', [])
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['videos', 'updatedAt'])
+            && request.resource.data.videos is list && request.resource.data.videos.size() <= 2000));
+
+      allow delete: if signedIn() && request.auth.uid == userId;
+    }
+
+    // 「共有されたプレイリスト」一覧用の目印（宛先メールアドレスの本人だけが読める）
+    match /shares/{email}/items/{playlistId} {
+      allow read: if verified() && myEmail() == email;
+      allow delete: if signedIn() && (
+        resource.data.ownerUid == request.auth.uid || (verified() && myEmail() == email));
+      allow create, update: if signedIn()
+        && request.resource.data.ownerUid == request.auth.uid
+        && request.resource.data.keys().hasOnly(['ownerUid', 'ownerEmail', 'playlistId', 'role', 'name'])
+        && request.resource.data.playlistId == playlistId
+        && request.resource.data.role in ['view', 'edit']
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid)/playlists/$(playlistId));
     }
 
     // それ以外はすべて拒否

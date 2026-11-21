@@ -237,3 +237,10 @@ dialog.dlg::backdrop { background: #000a; }
 .as-list .cn { margin: 0; align-self: end; }
 .as-list .cs { align-self: start; }
 .as-list .card-more { position: static; flex: none; background: none; box-shadow: none; color: var(--muted); }
+
+/* ---- 共有 ---- */
+h2.sec { font-size: 18px; margin: 28px 0 12px; }
+.members { display: flex; flex-direction: column; gap: 6px; max-height: 30dvh; overflow: auto; }
+.member { display: flex; align-items: center; justify-content: space-between; gap: 10px; background: var(--panel2); border-radius: 10px; padding: 8px 10px; }
+.m-email { word-break: break-all; font-weight: 600; }
+.btn.danger { color: #ff6b7d; }

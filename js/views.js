@@ -70,27 +70,82 @@ const playPl = (pl, shuffle) => {
   const ctx = { type: 'playlist', id: pl.id };
   shuffle ? player.playShuffled(pl.videos, ctx) : (player.state.shuffle = false, player.play(pl.videos, 0, ctx));
 };
+const roleLabel = (r) => (r === 'edit' ? '編集もできる' : '見るだけ');
+const isOwner = (pl) => pl.role === 'owner';
+
 function plMenu(pl, goHome) {
+  const owner = isOwner(pl), edit = store.canEdit(pl);
   return modal(
     `<h3>${esc(pl.name)}</h3>
      <button class="menu-btn" data-a="play">▶ 再生</button>
      <button class="menu-btn" data-a="shuffle">🔀 シャッフル再生</button>
-     <button class="menu-btn" data-a="add">＋ 動画を追加</button>
-     <button class="menu-btn" data-a="rename">✎ 名前を変更</button>
-     <button class="menu-btn danger" data-a="delete">🗑 削除</button>`,
+     ${edit ? '<button class="menu-btn" data-a="add">＋ 動画を追加</button>' : ''}
+     ${owner ? '<button class="menu-btn" data-a="share">👥 共有…</button><button class="menu-btn" data-a="rename">✎ 名前を変更</button><button class="menu-btn danger" data-a="delete">🗑 削除</button>'
+       : '<button class="menu-btn danger" data-a="leave">共有を解除（自分の一覧から外す）</button>'}`,
     (d, done) => $$('[data-a]', d).forEach((b) => (b.onclick = () => done(b.dataset.a))))
     .then((a) => {
       if (a === 'play') playPl(pl, false);
       else if (a === 'shuffle') playPl(pl, true);
       else if (a === 'add') location.hash = `#/add?pl=${pl.id}`;
+      else if (a === 'share') sharePl(pl.id);
       else if (a === 'rename') renamePl(pl);
       else if (a === 'delete') deletePl(pl, goHome);
+      else if (a === 'leave') leavePl(pl, goHome);
     });
+}
+
+async function leavePl(pl, goHome) {
+  if (!(await confirmDialog(`「${pl.name}」の共有を解除しますか？（自分の一覧から消えます。持ち主のデータは消えません）`, '解除'))) return;
+  store.leaveShared(pl.id);
+  if (goHome) location.hash = '#/';
+}
+
+// 共有の設定ダイアログ（持ち主だけ）。開いている間は最新の状態に更新される。
+function sharePl(id) {
+  const get = () => store.state.playlists.find((p) => p.id === id);
+  if (!get()) return;
+  const d = document.createElement('dialog');
+  d.className = 'dlg';
+  document.body.appendChild(d);
+  const draw = () => {
+    const pl = get();
+    if (!pl) { d.close(); return; }
+    const rows = [...pl.editorEmails.map((e) => [e, 'edit']), ...pl.viewerEmails.map((e) => [e, 'view'])];
+    d.innerHTML = `<div class="dlg-body"><h3>「${esc(pl.name)}」を共有</h3>
+      <p class="muted small">共有した相手だけがこのプレイリストを見られます。相手はこのアプリに、そのメールアドレスのGoogleアカウントでログインしてください。共有していないプレイリストは相手に一切見えません。</p>
+      <div class="members">${rows.length ? rows.map(([e, r]) => `<div class="member"><div><div class="m-email">${esc(e)}</div><div class="muted small">${roleLabel(r)}</div></div><button class="btn danger" data-unshare="${esc(e)}">解除</button></div>`).join('') : '<p class="muted small">まだ誰にも共有していません。</p>'}</div>
+      <form class="stack"><label class="lbl">共有する相手のGoogleメールアドレス</label>
+        <input class="inp" type="email" inputmode="email" autocapitalize="off" autocomplete="off" placeholder="example@gmail.com" required>
+        <select class="inp"><option value="view">見るだけ（再生のみ）</option><option value="edit">編集もできる（追加・削除・並べ替え）</option></select>
+        <div class="dlg-actions"><button type="button" class="btn" data-close>閉じる</button><button class="btn primary">共有する</button></div></form></div>`;
+  };
+  d.addEventListener('click', async (e) => {
+    if (e.target === d || e.target.closest('[data-close]')) return d.close();
+    const u = e.target.closest('[data-unshare]');
+    if (u) { await store.unshare(id, u.dataset.unshare); toast('共有を解除しました'); }
+  });
+  d.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const f = e.target;
+    try {
+      await store.shareWith(id, f.querySelector('input').value, f.querySelector('select').value);
+      toast('共有しました'); f.querySelector('input').value = '';
+    } catch (err) { toast(err.message, { error: true }); }
+  });
+  const stop = store.subscribe(() => {
+    if (!d.open) return;
+    const keep = d.querySelector('input')?.value;
+    draw();
+    if (keep) d.querySelector('input').value = keep;
+  });
+  d.addEventListener('close', () => { stop(); d.remove(); });
+  draw();
+  d.showModal();
 }
 
 // 既存のプレイリストを選ぶ／その場で新規作成して選ぶ
 function choosePlaylist() {
-  const pls = store.state.playlists;
+  const pls = store.state.playlists.filter(store.canEdit);
   return modal(
     `<h3>プレイリストに追加</h3>
      <div class="pick">${pls.map((p) => `<button class="menu-btn" data-id="${p.id}">${esc(p.name)} <small class="muted">${p.videos.length}本</small></button>`).join('')}</div>
@@ -108,7 +163,7 @@ async function addToPlaylist(v) {
   if (!r) return;
   if (r.newName) { store.createPlaylist(r.newName, [v]); return toast(`「${r.newName}」を作成して追加しました`); }
   const pl = store.state.playlists.find((p) => p.id === r.id);
-  if (!pl) return;
+  if (!pl || !store.canEdit(pl)) return;
   if (pl.videos.some((x) => x.videoId === v.videoId)) return toast('すでに入っています');
   if (store.addVideos(pl.id, [v]).length) toast(`「${pl.name}」に追加しました`);
 }
@@ -166,18 +221,21 @@ let libView = (() => { try { return localStorage.getItem('okitube.libView') === 
 export function library() {
   const el = root();
   function draw() {
-    const pls = store.state.playlists;
+    const own = store.state.playlists.filter(isOwner), shared = store.state.playlists.filter((p) => !isOwner(p));
+    const nShared = (p) => p.viewerEmails.length + p.editorEmails.length;
+    const card = (p) => `<div class="card" data-id="${p.id}">
+          <button class="card-open" data-act="open">${mosaic(p)}<span class="cn">${esc(p.name)}</span><span class="cs">${p.videos.length}本の動画${isOwner(p) ? (nShared(p) ? ` · 👥${nShared(p)}人に共有中` : '') : ` · 共有（${roleLabel(p.role)}）`}</span></button>
+          <button class="card-more" data-act="more" aria-label="メニュー">${icon('more')}</button></div>`;
     el.innerHTML = `<div class="page"><div class="lib-head"><h1>ライブラリ</h1>
         <div class="seg view-toggle" role="group" aria-label="表示形式">
           <button data-act="view-grid" aria-pressed="${libView === 'grid'}" title="タイル表示">▦</button>
           <button data-act="view-list" aria-pressed="${libView === 'list'}" title="リスト表示">☰</button>
         </div></div>
       <div class="grid ${libView === 'list' ? 'as-list' : ''}">
-        ${pls.map((p) => `<div class="card" data-id="${p.id}">
-          <button class="card-open" data-act="open">${mosaic(p)}<span class="cn">${esc(p.name)}</span><span class="cs">${p.videos.length}本の動画</span></button>
-          <button class="card-more" data-act="more" aria-label="メニュー">${icon('more')}</button></div>`).join('')}
+        ${own.map(card).join('')}
         <button class="card" data-act="new"><span class="cover newc"><span class="plus">＋</span></span><span class="cn">新規作成</span><span class="cs">&nbsp;</span></button>
       </div>
+      ${shared.length ? `<h2 class="sec">共有されたプレイリスト</h2><div class="grid ${libView === 'list' ? 'as-list' : ''}">${shared.map(card).join('')}</div>` : ''}
       ${!store.state.ready ? '<p class="muted center">読み込み中…</p>' : ''}
       ${store.state.error ? `<p class="notice err">${store.state.error === 'permission-denied' ? 'データを読み込めません（権限エラー）。FirestoreのセキュリティルールをREADMEの通りに設定してください。' : '同期エラー: ' + esc(store.state.error)}</p>` : ''}
     </div>`;
@@ -214,19 +272,20 @@ export function playlist(id) {
       return;
     }
     el.innerHTML = `<div class="page"><a class="back" href="#/">‹ ライブラリ</a>
-      <div class="pl-head">${mosaic(pl, 'big')}<div class="pl-info"><h1>${esc(pl.name)}</h1><p class="muted">${pl.videos.length}本の動画</p></div></div>
+      <div class="pl-head">${mosaic(pl, 'big')}<div class="pl-info"><h1>${esc(pl.name)}</h1><p class="muted">${pl.videos.length}本の動画${isOwner(pl) ? (pl.viewerEmails.length + pl.editorEmails.length ? ` · 👥${pl.viewerEmails.length + pl.editorEmails.length}人に共有中` : '') : ` · 共有（${roleLabel(pl.role)}）${pl.ownerEmail ? ' · 持ち主: ' + esc(pl.ownerEmail) : ''}`}</p></div></div>
       <div class="actions">
         <button class="btn primary" data-act="playall">▶ 再生</button>
         <button class="btn" data-act="shuffle">🔀 シャッフル</button>
-        <button class="btn" data-act="addvid">＋ 動画を追加</button>
-        <button class="btn ${editing ? 'on' : ''}" data-act="edit">${editing ? '✓ 完了' : '並べ替え・削除'}</button>
+        ${store.canEdit(pl) ? `<button class="btn" data-act="addvid">＋ 動画を追加</button>
+        <button class="btn ${editing ? 'on' : ''}" data-act="edit">${editing ? '✓ 完了' : '並べ替え・削除'}</button>` : ''}
+        ${isOwner(pl) ? '<button class="btn" data-act="share">👥 共有</button>' : ''}
         <button class="icon-btn" data-act="menu" aria-label="その他">${icon('more')}</button>
       </div>
       ${pl.videos.length
-        ? `<ul class="list ${editing ? 'editing' : ''}" id="vlist">${pl.videos.map((v) => rowHtml(v, { edit: editing })).join('')}</ul>`
-        : '<div class="empty">まだ動画がありません。<br>「＋ 動画を追加」から、YouTube検索またはURLで追加できます。</div>'}
+        ? `<ul class="list ${editing ? 'editing' : ''}" id="vlist">${pl.videos.map((v) => rowHtml(v, { edit: editing && store.canEdit(pl) })).join('')}</ul>`
+        : `<div class="empty">まだ動画がありません。${store.canEdit(pl) ? '<br>「＋ 動画を追加」から、YouTube検索またはURLで追加できます。' : ''}</div>`}
     </div>`;
-    if (editing) {
+    if (editing && store.canEdit(pl)) {
       const ul = $('#vlist', el);
       if (ul) enableDrag(ul, (uids) => {
         const by = new Map(pl.videos.map((v) => [v.uid, v]));
@@ -242,14 +301,15 @@ export function playlist(id) {
     const act = b.dataset.act;
     if (act === 'playall') playPl(pl, false);
     else if (act === 'shuffle') playPl(pl, true);
-    else if (act === 'addvid') location.hash = `#/add?pl=${pl.id}`;
-    else if (act === 'edit') { editing = !editing; draw(); }
+    else if (act === 'addvid' && store.canEdit(pl)) location.hash = `#/add?pl=${pl.id}`;
+    else if (act === 'edit' && store.canEdit(pl)) { editing = !editing; draw(); }
+    else if (act === 'share' && isOwner(pl)) sharePl(pl.id);
     else if (act === 'menu') plMenu(pl, true);
     else if (act === 'play') {
       const li = b.closest('li');
       const idx = pl.videos.findIndex((v) => v.uid === li.dataset.uid);
       if (idx >= 0) player.play(pl.videos, idx, { type: 'playlist', id: pl.id });
-    } else if (act === 'del') {
+    } else if (act === 'del' && store.canEdit(pl)) {
       const li = b.closest('li');
       const before = pl.videos;
       const v = before.find((x) => x.uid === li.dataset.uid);
@@ -288,7 +348,7 @@ export function add(params) {
   const inTarget = (videoId) => added.has(`${target}:${videoId}`) || !!store.state.playlists.find((p) => p.id === target)?.videos.some((v) => v.videoId === videoId);
 
   function fillTarget() {
-    const pls = store.state.playlists;
+    const pls = store.state.playlists.filter(store.canEdit);
     const extra = created && !pls.some((p) => p.id === created.id) ? `<option value="${created.id}">${esc(created.name)}</option>` : '';
     tgt.innerHTML = `<option value="">選んでください…</option>${pls.map((p) => `<option value="${p.id}">${esc(p.name)}</option>`).join('')}${extra}<option value="__new">＋ 新しいプレイリストを作成…</option>`;
     if (!target && !pls.length && store.state.ready) target = '__new';
