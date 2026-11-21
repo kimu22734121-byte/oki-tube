@@ -17,7 +17,7 @@ const sharedMap = new Map();
 let ownList = [];
 const listeners = new Set();
 
-export const state = { user: null, playlists: [], ready: false, fromCache: false, pending: false, error: null };
+export const state = { user: null, playlists: [], ready: false, fromCache: false, pending: false, error: null, access: 'ok', isAdmin: false };
 
 export const subscribe = (fn) => { listeners.add(fn); return () => listeners.delete(fn); };
 const emit = () => listeners.forEach((f) => { try { f(); } catch (e) { console.error(e); } });
@@ -42,16 +42,52 @@ export async function init(config) {
   }
 }
 
+// 許可制: 管理者（admins/{uid}）か、許可リスト（allowed/{メール}）に入っている人だけが使える。
+// 確認できないとき（オフライン・ルール未更新など）は通し、実際の保存・読み取りはルール側で守られる。
+async function checkAccess(u) {
+  const email = (u.email || '').toLowerCase();
+  state.isAdmin = false;
+  try {
+    const [a, m] = await Promise.all([
+      F.getDoc(F.doc(db, 'admins', u.uid)),
+      email ? F.getDoc(F.doc(db, 'allowed', email)) : Promise.resolve(null),
+    ]);
+    state.isAdmin = a.exists();
+    return a.exists() || (m && m.exists()) ? 'ok' : 'denied';
+  } catch (e) {
+    console.warn('利用許可を確認できませんでした', e.code || e);
+    return 'ok';
+  }
+}
+
 export function onAuth(cb) {
-  return F.onAuthStateChanged(auth, (u) => {
+  return F.onAuthStateChanged(auth, async (u) => {
     stopSync();
     state.user = u ? { uid: u.uid, email: u.email, name: u.displayName, photo: u.photoURL } : null;
     state.playlists = []; ownList = []; sharedMap.clear(); state.ready = false; state.error = null;
-    if (u) startSync(u.uid, (u.email || '').toLowerCase(), !!u.emailVerified);
+    state.access = 'ok'; state.isAdmin = false;
+    if (u) {
+      state.access = await checkAccess(u);
+      if (!auth.currentUser || auth.currentUser.uid !== u.uid) return; // 確認中に別のアカウントへ切り替わった
+      if (state.access === 'ok') startSync(u.uid, (u.email || '').toLowerCase(), !!u.emailVerified);
+    }
     cb(state.user);
     emit();
   });
 }
+
+/* ---------- メンバー管理（管理者のみ） ---------- */
+export function watchAllowed(cb, onError) {
+  return F.onSnapshot(F.collection(db, 'allowed'),
+    (snap) => cb(snap.docs.map((d) => d.id).sort()),
+    (e) => onError?.(e));
+}
+export function allowEmail(raw) {
+  const email = normEmail(raw);
+  if (!validEmail(email)) throw new Error('メールアドレスの形式が正しくありません');
+  return F.setDoc(F.doc(db, 'allowed', email), { addedAt: Date.now(), addedBy: state.user.uid }).catch(fail);
+}
+export const disallowEmail = (raw) => F.deleteDoc(F.doc(db, 'allowed', normEmail(raw))).catch(fail);
 
 export async function signIn() {
   const provider = new F.GoogleAuthProvider();
