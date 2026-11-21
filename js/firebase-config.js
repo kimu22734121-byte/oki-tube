@@ -2,11 +2,9 @@
 // ※ この値は公開されても問題ない設定値です（秘密のパスワードではありません）。
 //   データは Firestore のセキュリティルール + Googleログインで守られます。
 // ※ YouTube の APIキーは絶対にここに書かないでください（アプリの設定画面で入力します）。
-//
-// 空のままでも、アプリ起動後の画面に設定を貼り付けて使うことができます（その端末のみ保存）。
 export default {
-  apiKey: "",
-  authDomain: "",
-  projectId: "",
-  appId: ""
+  apiKey: "AIzaSyDSaGOCOkf-LoMrHkSS9yimW66p4kxQmr4",
+  authDomain: "oki-tube-6b5c4.firebaseapp.com",
+  projectId: "oki-tube-6b5c4",
+  appId: "1:6911606301:web:bda290dd460fb2e49a50f4"
 };
