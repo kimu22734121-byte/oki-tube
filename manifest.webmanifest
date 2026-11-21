@@ -1,0 +1,11 @@
+{
+  "name": "oki-tube",
+  "short_name": "oki-tube",
+  "description": "お気に入りのYouTube動画をプレイリストで管理・連続再生",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0d0d10",
+  "theme_color": "#0d0d10",
+  "icons": [{ "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}

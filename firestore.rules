@@ -1,0 +1,23 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // 自分のデータ（users/自分のUID/ 以下）だけ読み書きできる
+    match /users/{userId}/playlists/{playlistId} {
+      allow read, delete: if request.auth != null && request.auth.uid == userId;
+
+      allow create, update: if request.auth != null
+        && request.auth.uid == userId
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0
+        && request.resource.data.name.size() <= 100
+        && request.resource.data.videos is list
+        && request.resource.data.videos.size() <= 2000;
+    }
+
+    // それ以外はすべて拒否
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
